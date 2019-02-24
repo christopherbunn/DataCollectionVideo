@@ -10,31 +10,32 @@ import os
 import datetime
 
 # Experiment Global Variables - Should be consistent between runs
-left_key = "f"
-right_key = "j"
+left_key = "1"
+right_key = "2"
 repeat_key = "<Key-space>"
 continue_key = "<Key-space>"
 pause_experiment_key = "<Return>"
-result_directory = "./"
-max_repeat = 10
+result_directory = "../Results/"
+max_repeat = 7
 reverse_percentage = 0.10
 nonsense_percentage = 0.05
 participant_name = ""
 max_num_of_random_labels = 4
 max_num_of_pairs = 6
+break_trial=200
 
 
 def beep(beep_type=None):
     if beep_type == "left":
-        duration = 0.5  # second
+        duration = 0.2  # second
         freq = 640  # Hz
         os.system('play --no-show-progress --null --channels 1 synth %s sine %f' % (duration, freq))
     elif beep_type == "right":
-        duration = 0.5  # second
+        duration = 0.2  # second
         freq = 540  # Hz
         os.system('play --no-show-progress --null --channels 1 synth %s sine %f' % (duration, freq))
     else:
-        duration = 0.35  # second
+        duration = 0.2  # second
         freq = 240  # Hz
         os.system('play --no-show-progress --null --channels 1 synth %s sine %f' % (duration, freq))
 
@@ -95,12 +96,12 @@ class SetParameters:
 
         tkinter.Label(frame, text=field_labels[0]).grid(row=0, column=0, sticky='E')
         img_entry = tkinter.Entry(frame, textvariable=video_path_box)
-        img_entry.insert(0, 'assets/BenchmarkVIDEOS')
+        img_entry.insert(0, '../New_Assets/Images/BenchmarkVIDEOS')
         img_entry.grid(row=0, column=1, sticky='W')
 
         tkinter.Label(frame, text=field_labels[1]).grid(row=1, column=0, sticky='E')
         desc_entry = tkinter.Entry(frame, textvariable=desc_path_box)
-        desc_entry.insert(0, 'assets/descriptions.csv')
+        desc_entry.insert(0, '../New_Assets/Descriptions/descriptions.csv')
         desc_entry.grid(row=1, column=1, sticky='W')
 
         tkinter.Label(frame, text=field_labels[2]).grid(row=2, column=0, sticky='E')
@@ -110,7 +111,7 @@ class SetParameters:
 
         tkinter.Label(frame, text=field_labels[3]).grid(row=3, column=0, sticky='E')
         nonsense_entry = tkinter.Entry(frame, textvariable=nonsense_path_box)
-        nonsense_entry.insert(0, 'assets/nonsense.csv')
+        nonsense_entry.insert(0, '../New_Assets/nonsense.csv')
         nonsense_entry.grid(row=3, column=1, sticky='W')
 
         tkinter.Button(window, text="Run Experiment", command=save_parameters).grid(row=5)
@@ -143,13 +144,9 @@ class ReadInstructions:
             self.window.bind("<space>", self.exit_window)
 
     def read_instructions(self):
-        say('A series of photos will be shown. Each photo will have two captions associated with the photo. '
-            'Before each caption is read, this tone will sound. ')
-        time.sleep(0.5)
-        beep()
-        time.sleep(0.5)
+        say('A series of video will be shown. Each video will have two captions associated with the photo. ')
         say('Each caption will be denoted with left or right at the beginning. '
-            'If the left caption fits the best, press the left key. If the right caption fits the best,'
+            'If you prefer the left caption, press the left key. If you prefer the right caption,'
             'press the right key. To repeat both captions, press the space bar.')
         time.sleep(1)
         say('Before we start, let\'s test the keys. Press the left key now')
@@ -329,11 +326,11 @@ class RunExperiment:
     def read_label(self, event=None):
         self.lock_key()
         beep()
-        time.sleep(0.6)
+        time.sleep(0.5)
         say('left: ' + self.left_label.replace('\'', '\\\''))
         time.sleep(1)
         beep()
-        time.sleep(0.6)
+        time.sleep(0.5)
         say('right: ' + self.right_label.replace('\'', '\\\''))
         self.window.after(1, self.unlock_key)
 
@@ -342,9 +339,18 @@ class RunExperiment:
         self.play_video()
         self.read_label()
 
+    def set_window_sizes(self):
+        screen_width = self.window.winfo_screenwidth()
+        screen_height = self.window.winfo_screenheight()
+        self.video_height = 5 * (screen_height / 6)
+        self.video_width = screen_width
+        self.window.geometry("%dx%d+%d+%d" % (screen_width,  (screen_height / 6),
+                                              screen_width,  self.video_height))
+
     def play_video(self):
         vlc_command = '/Applications/VLC.app/Contents/MacOS/VLC  --no-keyboard-events ' \
-                      '--no-mouse-events --zoom 3 --no-autoscale --width 2560 --height 1080  --play-and-exit --video-on-top '
+                      '--no-mouse-events --zoom 2 --no-autoscale --play-and-exit --video-on-top ' \
+                      '--width ' + str(self.video_width) + ' --height ' + str(self.video_height) + ' '
         os.system(vlc_command + self.curr_video_path)
 
     def run_trial(self, res_path):
@@ -388,6 +394,8 @@ class RunExperiment:
     def choose_string(self, pressed, res_path, event=None):
         self.end_time = time.time()
         self.lock_key()
+        if self.trial_number == break_trial:
+            PauseExperiment('break')
         if self.repeat_key_counter >= max_repeat:
             PauseExperiment('repeats')
             self.repeat_key_counter = 0
@@ -453,8 +461,8 @@ class RunExperiment:
 
     def read_desc(self, desc_path):
         with open(desc_path, 'r') as f:
-            # reader = csv.reader(f, delimiter='\t') # TSV File
-            reader = csv.reader(f)  # CSV File
+            reader = csv.reader(f, delimiter='\t') # TSV File
+            # reader = csv.reader(f)  # CSV File
             temp = list(reader)
         temp = temp[1:]  # Remove table headers
         for i, img_entry in enumerate(temp):
@@ -472,9 +480,6 @@ class RunExperiment:
         self.video_files = list()
         self.window = tkinter.Tk()
         self.lock_key()
-        self.window.geometry("%dx%d+%d+%d" % (self.window.winfo_screenwidth(), self.window.winfo_screenheight() / 6,
-                                              self.window.winfo_screenwidth(), self.window.winfo_screenheight() - self.window.winfo_screenheight() / 6))
-        print("Window size: w: " + str(self.window.winfo_screenwidth()) + " h: " + str(self.window.winfo_screenheight() / 6))
         self.read_desc(in_params.desc_path)
         self.res_path = in_params.res_path
         self.label_pairs = list()
@@ -490,19 +495,21 @@ class RunExperiment:
         self.end_time = 0
         self.repeat_key_counter = 0
         self.repeat_label_counter = 0
+        self.video_height = 0
+        self.video_width = 0
         self.top_left_act = None
         self.top_left_bttn = None
         self.write_repeat = None
         self.top_right_act = None
         self.top_right_bttn = None
         self.playlist = dict()
+        self.set_window_sizes()
         for video in self.video_files:
             full_path = in_params.video_path + '/' + video
             self.playlist[video] = full_path
             self.get_labels(video)
         self.add_control_cases(in_params.nonsense_path)
         self.run_trial(in_params.res_path)
-
 
 
 params = SetParameters()
