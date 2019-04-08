@@ -1,10 +1,8 @@
 import tkinter
 import tkinter as ttk
 import csv
-import random
 import time
 from functools import partial
-from PIL import ImageTk, Image
 from os import path
 import os
 import datetime
@@ -15,13 +13,10 @@ right_key = "2"
 repeat_key = "<Key-space>"
 continue_key = "<Key-space>"
 pause_experiment_key = "<Return>"
-result_directory = "../Results/"
+result_directory = "./results/"
+label_pairs_directory = "../New_Assets/LabelPairs/test.tsv"
 max_repeat = 7
-reverse_percentage = 0.10
-nonsense_percentage = 0.05
 participant_name = ""
-max_num_of_random_labels = 4
-max_num_of_pairs = 6
 break_trial=200
 
 
@@ -44,26 +39,20 @@ def say(text_to_say=None):
     os.system('say "' + text_to_say + ' "')
 
 
-class Entry:
-    image_name = ""
-    choice = ""
-    alternate = ""
-    choice_pos = ""
-    duration = 0.0
-    run_type = ""  # trial, control1, control2
-    num_repeats = ""
-
-
 class LabelPair:
-    image_name = ""
-    left_label = ""
-    right_label = ""
+    video_name = ""
+    left_desc = ""
+    left_desc_type = ""
+    right_desc = ""
+    right_desc_type = ""
     trial_type = ""
 
-    def __init__(self, in_image_name, in_left_label, in_right_label, in_trial_type):
-        self.image_name = in_image_name
-        self.left_label = in_left_label
-        self.right_label = in_right_label
+    def __init__(self, in_video_name, in_left_desc, in_left_desc_type, in_right_desc, in_right_desc_type, in_trial_type):
+        self.video_name = in_video_name
+        self.left_desc = in_left_desc
+        self.left_desc_type = in_left_desc_type
+        self.right_desc = in_right_desc
+        self.right_desc_type = in_right_desc_type
         self.trial_type = in_trial_type
 
 
@@ -76,7 +65,7 @@ class SetParameters:
             self.nonsense_path = nonsense_path_box.get()
             participant_name = res_path_box.get()
             now = datetime.datetime.now()
-            self.res_path = result_directory + self.res_path + "-" + str(now.day) + "-" + str(now.month) + "-" + str(now.year) + "-" + \
+            self.res_path = result_directory + self.res_path + participant_name + "-" + str(now.day) + "-" + str(now.month) + "-" + str(now.year) + "-" + \
                 str(now.hour) + ":" + str(now.minute) + ":" + str(now.second) + ".csv"
             window.destroy()
 
@@ -87,7 +76,7 @@ class SetParameters:
         frame.columnconfigure(0, weight=1)
         frame.rowconfigure(0, weight=1)
 
-        field_labels = ["Video Location", "Description Location", "Participant Initials", "Nonsense File Path"]
+        field_labels = ["Video Location", "Label Pairs Location", "Participant Initials"]
 
         video_path_box = ttk.StringVar()
         desc_path_box = ttk.StringVar()
@@ -95,13 +84,13 @@ class SetParameters:
         nonsense_path_box = ttk.StringVar()
 
         tkinter.Label(frame, text=field_labels[0]).grid(row=0, column=0, sticky='E')
-        img_entry = tkinter.Entry(frame, textvariable=video_path_box)
-        img_entry.insert(0, '../New_Assets/Images/BenchmarkVIDEOS')
-        img_entry.grid(row=0, column=1, sticky='W')
+        video_entry = tkinter.Entry(frame, textvariable=video_path_box)
+        video_entry.insert(0, '../New_Assets/Videos/BenchmarkVIDEOS')
+        video_entry.grid(row=0, column=1, sticky='W')
 
         tkinter.Label(frame, text=field_labels[1]).grid(row=1, column=0, sticky='E')
         desc_entry = tkinter.Entry(frame, textvariable=desc_path_box)
-        desc_entry.insert(0, '../New_Assets/Descriptions/descriptions.csv')
+        desc_entry.insert(0, '../New_Assets/LabelPairs/test_video.tsv')
         desc_entry.grid(row=1, column=1, sticky='W')
 
         tkinter.Label(frame, text=field_labels[2]).grid(row=2, column=0, sticky='E')
@@ -109,20 +98,13 @@ class SetParameters:
         res_entry.insert(0, 'noname')
         res_entry.grid(row=2, column=1, sticky='W')
 
-        tkinter.Label(frame, text=field_labels[3]).grid(row=3, column=0, sticky='E')
-        nonsense_entry = tkinter.Entry(frame, textvariable=nonsense_path_box)
-        nonsense_entry.insert(0, '../New_Assets/nonsense.csv')
-        nonsense_entry.grid(row=3, column=1, sticky='W')
-
         tkinter.Button(window, text="Run Experiment", command=save_parameters).grid(row=5)
         window.mainloop()
 
     def __init__(self):
-        self.video_path = 'assets/BenchmarkVIDEOS'
-        self.desc_path = 'assets/descriptions.csv'
-        self.res_path = 'noname'
-        self.num_videos = 0
-        self.break_size = 0
+        self.video_path = ''
+        self.desc_path = ''
+        self.res_path = ''
         self.get_params()
 
 
@@ -256,94 +238,11 @@ class RunExperiment:
         self.window.bind(repeat_key, self.repeat_label)
         self.window.bind(pause_experiment_key, self.take_break)
 
-    def get_labels(self, video):
-        all_labels = self.descriptions[video]
-        chosen_labels = []
-        # From all of the available descriptions, choose a subset of max_num_of_random_labels
-        while len(chosen_labels) < max_num_of_random_labels:
-            idx = random.randint(0, len(all_labels) - 1)
-            if all_labels[idx] not in chosen_labels:
-                chosen_labels.append(all_labels[idx])
-        curr_num_of_pairs = 0
-        # Not randomized pairs - will be randomized and placed into self.label_pairs
-        temp_pairs = list()
-        # From the subset of pairs, create max_num_of_pairs amount of pairs
-        for label_l in chosen_labels:
-            for label_r in chosen_labels:
-                if curr_num_of_pairs < max_num_of_pairs:
-                    # Add to possible pairs if the chosen descriptions are not the same and
-                    # both the same pair and the opposite does not exist
-                    if label_l != label_r and (video, label_r, label_l, "Trial") not in self.label_pairs \
-                            and (video, label_l, label_r, "Trial") not in self.label_pairs:
-                        temp_pairs.append((video, label_l, label_r, "Trial"))
-                        curr_num_of_pairs += 1
-        # After the label pairs are created, randomly swap the description between the pairs
-        while len(temp_pairs) != 0:
-            curr_pair = temp_pairs.pop()
-            choice = random.randint(0,1)
-            # If 1, swap the values
-            if choice == 1:
-                # print("Swapping...") # Use to validate pairs have swapped
-                # print("Before: ", curr_pair)
-                # print("After: ", (curr_pair[0], curr_pair[2], curr_pair[1], curr_pair[3]))
-                self.label_pairs.append((curr_pair[0], curr_pair[2], curr_pair[1], curr_pair[3]))
-            else: # Leave the pairs as written by the program
-                self.label_pairs.append((curr_pair[0], curr_pair[1], curr_pair[2], curr_pair[3]))
-
-    def get_nonsense_list(self, num_of_nonsense, nonsense_path):
-        nonsense = []
-        with open(nonsense_path, 'r') as f:
-            reader = csv.reader(f)
-            temp = list(reader)
-        for i, sentence in enumerate(temp):
-            nonsense.append(sentence[0])
-        final_list = []
-        while len(final_list) < num_of_nonsense:
-            final_list.append(random.choice(nonsense))
-        return final_list
-
-    def add_control_cases(self, nonsense_path):
-        rev_pairs = []
-        nonsense_pairs = []
-        print("Regular", len(self.label_pairs))
-        # Reverse pair - 10% - Control 1
-        num_rev_pairs = len(self.label_pairs) * reverse_percentage
-        while len(rev_pairs) < num_rev_pairs:
-            old_pair = random.choice(self.label_pairs)
-            new_pair = (old_pair[0], old_pair[2], old_pair[1], "Reverse Control")
-            rev_pairs.append(new_pair)
-        print("Reverse Controls", len(rev_pairs))
-        # Nonsense pair - 5% - Control 2
-        num_nonsense_pairs = len(self.label_pairs) * nonsense_percentage
-        new_labels = self.get_nonsense_list(num_nonsense_pairs, nonsense_path)
-        left_nonsense_pair = num_nonsense_pairs / 2
-        right_nonsense_pair = num_nonsense_pairs - left_nonsense_pair
-        new_labels_pos = 0
-        while len(nonsense_pairs) < num_nonsense_pairs:
-            old_pair = random.choice(self.label_pairs)
-            if left_nonsense_pair > 0:  # Left
-                new_pair = (old_pair[0], new_labels[new_labels_pos], old_pair[2], "Nonsense Control - Left")
-                left_nonsense_pair -= 1
-            else:
-                new_pair = (old_pair[0], old_pair[1], new_labels[new_labels_pos], "Nonsense Control - Right")
-                right_nonsense_pair -= 1
-            nonsense_pairs.append(new_pair)
-            new_labels_pos += 1
-        print("Nonsense Pairs", len(nonsense_pairs))
-        for new_pairs in rev_pairs:
-            self.label_pairs.append(new_pairs)
-        for new_pairs in nonsense_pairs:
-            self.label_pairs.append(new_pairs)
-        random.shuffle(self.label_pairs)
-        print("Total pairs: ", len(self.label_pairs))
-
     def read_label(self, event=None):
         self.lock_key()
-        beep()
         time.sleep(0.5)
         say('left: ' + self.left_label.replace('\'', '\\\''))
         time.sleep(1)
-        beep()
         time.sleep(0.5)
         say('right: ' + self.right_label.replace('\'', '\\\''))
         self.window.after(1, self.unlock_key)
@@ -375,11 +274,13 @@ class RunExperiment:
         button_frame = ttk.Frame(self.window)
         button_frame.pack()
 
-        curr_label_pair = self.label_pairs.pop()
-        self.curr_video_name = curr_label_pair[0]
-        self.left_label = curr_label_pair[1]
-        self.right_label = curr_label_pair[2]
-        self.run_type = curr_label_pair[3]
+        curr_label_pair = self.label_pairs.pop(0)
+        self.curr_video_name = curr_label_pair.video_name
+        self.left_label = curr_label_pair.left_desc
+        self.left_label_type = curr_label_pair.left_desc_type
+        self.right_label = curr_label_pair.right_desc
+        self.right_label_type = curr_label_pair.right_desc_type
+        self.run_type = curr_label_pair.trial_type
         self.curr_video_path = self.playlist[self.curr_video_name]
         self.repeat_label_counter = 0
 
@@ -422,14 +323,8 @@ class RunExperiment:
         else:
             self.repeat_key_counter = 1
             self.last_key = pressed
-        if pressed == 'left':
-            choice = self.top_left_bttn['text']
-            alternative = self.top_right_bttn['text']
-        else:
-            choice = self.top_right_bttn['text']
-            alternative = self.top_left_bttn['text']
-        say('next image')
-        self.write_entry(res_path, self.curr_video_name, choice, alternative)
+        say('next video')
+        self.write_entry(res_path, self.curr_video_name, self.top_left_bttn['text'], self.top_right_bttn['text'])
         self.write_repeat = False
         if len(self.label_pairs) == 0:
             say('This experiment is now over. Please call over the proctor to end the session.')
@@ -437,11 +332,13 @@ class RunExperiment:
         else:
             self.trial_number += 1
             self.repeat_label_counter = 0
-            curr_label_pair = self.label_pairs.pop()
-            self.curr_video_name = curr_label_pair[0]
-            self.left_label = curr_label_pair[1]
-            self.right_label = curr_label_pair[2]
-            self.run_type = curr_label_pair[3]
+            curr_label_pair = self.label_pairs.pop(0)
+            self.curr_video_name = curr_label_pair.video_name
+            self.left_label = curr_label_pair.left_desc
+            self.left_label_type = curr_label_pair.left_desc_type
+            self.right_label = curr_label_pair.right_desc
+            self.right_label_type = curr_label_pair.right_desc_type
+            self.run_type = curr_label_pair.trial_type
             self.curr_video_path = self.playlist[self.curr_video_name]
             self.window.title("Trial " + str(self.trial_number))
             self.top_left_bttn.configure(text=self.left_label)
@@ -454,54 +351,46 @@ class RunExperiment:
             self.window.after(1, self.unlock_key)
             self.start_time = time.time()
 
-    def write_entry(self, res_path, img_name, choice, alternative):
+    def write_entry(self, res_path, img_name, left, right):
         if path.isfile(res_path) is not True:
             with open(res_path, 'a') as csvfile:
                 filewriter = csv.writer(csvfile, delimiter=',',
                                         quotechar='\"', quoting=csv.QUOTE_MINIMAL)
-                filewriter.writerow(['Participant Initials', 'Image name', 'Left Option', 'Right Option', 'Duration',
+                filewriter.writerow(['Participant Initials', 'Video name', 'Left Option', 'Left Label Type', 'Right Option', 'Right Label Type', 'Duration',
                                      'Number of Command Repeats', 'Run Type', 'Key Chosen',
                                      'Passed Repeat Key Threshold'])
         with open(res_path, 'a') as csvfile:
             duration = round((self.end_time - self.start_time), 3)
             filewriter = csv.writer(csvfile, delimiter=',',
                                     quotechar='\"', quoting=csv.QUOTE_MINIMAL)
-            if self.key_pressed == 'left':
-                filewriter.writerow([participant_name, img_name, choice, alternative, duration,
-                                     self.repeat_label_counter, self.run_type, self.key_pressed, self.write_repeat])
-            elif self.key_pressed == 'right':
-                filewriter.writerow([participant_name, img_name, alternative, choice, duration,
-                                     self.repeat_label_counter, self.run_type, self.key_pressed, self.write_repeat])
+            filewriter.writerow([participant_name, img_name, left, self.left_label_type, right, self.right_label_type, duration,
+                                    self.repeat_label_counter, self.run_type, self.key_pressed, self.write_repeat])
 
     def read_desc(self, desc_path):
         with open(desc_path, 'r') as f:
             reader = csv.reader(f, delimiter='\t') # TSV File
-            # reader = csv.reader(f)  # CSV File
             temp = list(reader)
         temp = temp[1:]  # Remove table headers
-        for i, img_entry in enumerate(temp):
-            file_name = img_entry[0] + '.mp4'
-            if i % 2 != 1:
-                self.video_files.append(file_name)
-                for j, value in enumerate(img_entry):
-                    if j == 1:
-                        self.descriptions[file_name] = list()
-                    if j != 0 and value != '':
-                        self.descriptions[file_name].append(value)
+        for row in temp:
+            self.video_files.add(row[0])
+            new_pair = LabelPair(row[0], row[1], row[2], row[3], row[4], row[5])
+            self.label_pairs.append(new_pair)
 
     def __init__(self, in_params):
         self.descriptions = {}
-        self.video_files = list()
+        self.video_files = set()
         self.window = tkinter.Tk()
         self.lock_key()
-        self.read_desc(in_params.desc_path)
         self.res_path = in_params.res_path
         self.label_pairs = list()
+        self.read_desc(in_params.desc_path)
         self.curr_video_path = ''
         self.trial_number = 1
         self.curr_video_name = ''
         self.left_label = ''
+        self.left_label_type = ''
         self.right_label = ''
+        self.right_label_type = ''
         self.run_type = ''
         self.key_pressed = ''
         self.last_key = ''
@@ -521,11 +410,11 @@ class RunExperiment:
         for video in self.video_files:
             full_path = in_params.video_path + '/' + video
             self.playlist[video] = full_path
-            self.get_labels(video)
-        self.add_control_cases(in_params.nonsense_path)
+        print(self.label_pairs)
+        print(self.playlist)
         self.run_trial(in_params.res_path)
 
 
 params = SetParameters()
-ReadInstructions()
+# ReadInstructions()
 RunExperiment(params)
